@@ -38,11 +38,11 @@ using NeoPixel = Adafruit_NeoPixel;
 using Cybergear = pd::motor::xiaomi::Cybergear;
 // ---------------------------------------------------------------------------
 
-#define LEFT_MOTOR_ID            101
-#define RIGHT_MOTOR_ID           102
+#define LEFT_MOTOR_ID           101
+#define RIGHT_MOTOR_ID          102
 
-#define SBUS_THROTTLE_CHANNEL   2
-#define SBUS_TURN_CHANNEL       6
+#define SBUS_THROTTLE_CHANNEL   1
+#define SBUS_TURN_CHANNEL       5
 
 #define TOP_SPEED_LIMIT         0.1f /* Range 0.0 - 1.0 increase for faster response */ 
 
@@ -122,12 +122,15 @@ bool initLeftMotor() {
   if (!leftMotor.initMotor(Cybergear::MODE_SPEED)) {
     return false;
   }
+  delay(1);
   if (!leftMotor.enableMotor()) {
     return false;
   }
+  delay(1);
   if (!leftMotor.setSpeedRefPercentage(0)) {
     return false;
   }
+  delay(10);
   return true;
 }
 
@@ -135,12 +138,15 @@ bool initRightMotor() {
   if (!rightMotor.initMotor(Cybergear::MODE_SPEED)) {
     return false;
   }
+  delay(1);
   if (!rightMotor.enableMotor()) {
     return false;
   }
+  delay(1);
   if (!rightMotor.setSpeedRefPercentage(0)) {
     return false;
   }
+  delay(10);
   return true;
 }
 
@@ -169,11 +175,9 @@ void setup(void) {
   if (!initLeftMotor()) {
       PDLOG_ERROR("Failed left initMotor\n");
   }
-  delay(10);
   if (!initRightMotor()) {
       PDLOG_ERROR("Failed right initMotor\n");
   }
-  delay(10);
 }
 
 void printMotorStatus(const char* motorName, const Cybergear::MotorStatus &motorStatus) {
@@ -266,47 +270,6 @@ void loop() {
       }
     }
   }
-  // Process motor responses
-  Cybergear* motors[] = { &leftMotor, &rightMotor };
-  Cybergear::process(motors, sizeof(motors)/sizeof(motors[0]));
-
-  // If left motor responded check if there was an error
-  if (leftMotor.responded()) {
-    auto motorStatus = leftMotor.getStatus();
-    if (leftMotor.hasError()) {
-      printMotorStatus("leftMotor", motorStatus);
-      STATUS &= ~STATUS_LEFT_RESPONDING;
-    } else if ((STATUS & STATUS_LEFT_RESPONDING) == 0) {
-      if (motorStatus.mode != Cybergear::MODE_SPEED) {
-        initLeftMotor();
-      } else {
-        STATUS |= STATUS_LEFT_RESPONDING;
-        PDLOG_ERROR("LEFT MOTOR RESPONDING\n");
-      }
-    }
-  } else if ((STATUS & STATUS_LEFT_RESPONDING) != 0) {
-    PDLOG_ERROR("LEFT MOTOR NOT RESPONDING\n");
-    STATUS &= ~STATUS_LEFT_RESPONDING;
-  }
-
-  // If right motor responded check if there was an error
-  if (rightMotor.responded()) {
-    auto motorStatus = rightMotor.getStatus();
-    if (rightMotor.hasError()) {
-      printMotorStatus("rightMotor", motorStatus);
-      STATUS &= ~STATUS_RIGHT_RESPONDING;
-    } else if ((STATUS & STATUS_RIGHT_RESPONDING) == 0) {
-      if (motorStatus.mode != Cybergear::MODE_SPEED) {
-        initRightMotor();
-      } else {
-        STATUS |= STATUS_RIGHT_RESPONDING;
-        PDLOG_ERROR("RIGHT MOTOR RESPONDING\n");
-      }
-    }
-  } else if ((STATUS & STATUS_RIGHT_RESPONDING) != 0) {
-    PDLOG_ERROR("RIGHT MOTOR NOT RESPONDING\n");
-    STATUS &= ~STATUS_RIGHT_RESPONDING;
-  }
 
   // -------------------------------------------------------------------------
   // 1) Motor Mixing
@@ -332,9 +295,64 @@ void loop() {
   // 5) Send to Motors
   // -------------------------------------------------------------------------
   // Now we directly call .setSpeedRefPercentage() with values in [-1.0, 1.0].
-  // PDLOG_INFO("motorLeft: %0.2f motorRight: %0.2f\n", motorLeft, motorRight);
-  leftMotor.setSpeedRefPercentage(motorLeft);
-  rightMotor.setSpeedRefPercentage(motorRight);
+  if (motorLeft != 0 || motorRight != 0)
+    PDLOG_INFO("motorLeft: %0.2f motorRight: %0.2f\n", motorLeft, motorRight);
+
+  {
+    leftMotor.setSpeedRefPercentage(motorLeft);
+    delay(1);
+
+    // Process motor responses
+    Cybergear* motors[] = { &leftMotor };
+    Cybergear::process(motors, sizeof(motors)/sizeof(motors[0]));
+
+    // If left motor responded check if there was an error
+    if (leftMotor.responded()) {
+      auto motorStatus = leftMotor.getStatus();
+      if (leftMotor.hasError()) {
+        printMotorStatus("leftMotor", motorStatus);
+        STATUS &= ~STATUS_LEFT_RESPONDING;
+      } else if ((STATUS & STATUS_LEFT_RESPONDING) == 0) {
+        if (motorStatus.mode != Cybergear::MODE_SPEED) {
+          initLeftMotor();
+        } else {
+          STATUS |= STATUS_LEFT_RESPONDING;
+          PDLOG_ERROR("LEFT MOTOR RESPONDING\n");
+        }
+      }
+    } else if ((STATUS & STATUS_LEFT_RESPONDING) != 0) {
+      PDLOG_ERROR("LEFT MOTOR NOT RESPONDING\n");
+      STATUS &= ~STATUS_LEFT_RESPONDING;
+    }
+  }
+
+  {
+    rightMotor.setSpeedRefPercentage(motorRight);
+    delay(1);
+
+    // Process motor responses
+    Cybergear* motors[] = { &rightMotor };
+    Cybergear::process(motors, sizeof(motors)/sizeof(motors[0]));
+
+    // If right motor responded check if there was an error
+    if (rightMotor.responded()) {
+      auto motorStatus = rightMotor.getStatus();
+      if (rightMotor.hasError()) {
+        printMotorStatus("rightMotor", motorStatus);
+        STATUS &= ~STATUS_RIGHT_RESPONDING;
+      } else if ((STATUS & STATUS_RIGHT_RESPONDING) == 0) {
+        if (motorStatus.mode != Cybergear::MODE_SPEED) {
+          initRightMotor();
+        } else {
+          STATUS |= STATUS_RIGHT_RESPONDING;
+          PDLOG_ERROR("RIGHT MOTOR RESPONDING\n");
+        }
+      }
+    } else if ((STATUS & STATUS_RIGHT_RESPONDING) != 0) {
+      PDLOG_ERROR("RIGHT MOTOR NOT RESPONDING\n");
+      STATUS &= ~STATUS_RIGHT_RESPONDING;
+    }
+  }
 
   static unsigned lastStatus;
   static unsigned lastBlinkTime;
